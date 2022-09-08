@@ -9,22 +9,27 @@ struct
   type cmd =
     | File_exists of string
     | Remove of string
-    | Mkdir of string * int
+    | Mkdir of 
   [@@deriving show { with_path = false }]
 
   type filesys = 
   | Directory of string * filesys list
   | File      of string
   
-  (* type sut = Sys.t *)
+  type sut = unit
 
   let arb_cmd _s =
-    let str_gen = Gen.string in
-    let perm_gen = Gen.(oneof [0o111 ; 0o222 ; 0o333 ; 0o444 ; 0o555 ; 0o666 ; 0o777])
+    let str_gen = Gen.(oneof ["ccc" ; "hhh" ; "aaa"]) in
+    let perm_gen = 
+      ((Gen.generate1 (Gen.int_bound 7) * 100) + 
+       (Gen.generate1 (Gen.int_bound 7) *  10) + 
+       (Gen.generate1 (Gen.int_bound 7) *   1)
+      
+    
     QCheck.make ~print:show_cmd (*~shrink:shrink_cmd*)
       Gen.(oneof
-             [ map (fun file_name   -> File_exists file_name) str_gen;
-               map (fun file_name   -> Remove file_name) str_gen;
+             [ map  (fun file_name   -> File_exists file_name) str_gen;
+               map  (fun file_name   -> Remove file_name) str_gen;
                map2 (fun (folder_name, perm) -> Mkdir folder_name) str_gen perm_gen;
              ])
   
@@ -34,7 +39,7 @@ struct
   let state = Directory ("/" , [])
 
   let next_state file_name fs = match file_name with
-    | File_exists file_name -> List.mem file_name 
+    | File_exists file_name -> fs
     | Remove ()     -> 
     | Mkdir (f_name, perm) -> 
 
