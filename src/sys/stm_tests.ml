@@ -19,21 +19,18 @@ struct
   type sut = unit
 
   let arb_cmd _s =
-    let str_gen = Gen.(oneof ["ccc" ; "hhh" ; "aaa"]) in
+    let  str_gen = Gen.(oneof ["ccc" ; "hhh" ; "aaa"]) in
     let perm_gen = 
       ((Gen.generate1 (Gen.int_bound 7) * 100) + 
        (Gen.generate1 (Gen.int_bound 7) *  10) + 
-       (Gen.generate1 (Gen.int_bound 7) *   1)
-      
-    
+       (Gen.generate1 (Gen.int_bound 7) *   1) in
     QCheck.make ~print:show_cmd (*~shrink:shrink_cmd*)
       Gen.(oneof
              [ map  (fun file_name   -> File_exists file_name) str_gen;
                map  (fun file_name   -> Remove file_name) str_gen;
                map2 (fun (folder_name, perm) -> Mkdir folder_name) str_gen perm_gen;
              ])
-  
-
+             
   (* let folder_size = 16 *)
 
   let state = Directory ("/" , [])
