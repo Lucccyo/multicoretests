@@ -7,27 +7,36 @@ open STM
 module AConf =
 struct
   type cmd =
-    | File_exists of String
-    (* | Remove of String
-    | Mkdir of String * int *)
+    | File_exists of string
+    | Remove of string
+    | Mkdir of string * int
   [@@deriving show { with_path = false }]
 
-  type state = char list
+  type filesys = 
+  | Directory of string * filesys list
+  | File      of string
+  
   (* type sut = Sys.t *)
 
-  let arb_cmd s =
+  let arb_cmd _s =
+    let str_gen = Gen.string in
+    let perm_gen = Gen.(oneof [0o111 ; 0o222 ; 0o333 ; 0o444 ; 0o555 ; 0o666 ; 0o777])
     QCheck.make ~print:show_cmd (*~shrink:shrink_cmd*)
       Gen.(oneof
-             [ return File_exists;
-  
+             [ map (fun file_name   -> File_exists file_name) str_gen;
+               map (fun file_name   -> Remove file_name) str_gen;
+               map2 (fun (folder_name, perm) -> Mkdir folder_name) str_gen perm_gen;
              ])
+  
 
-  let folder_size = 16
+  (* let folder_size = 16 *)
 
-  let init_state  = List.init folder_size (fun _ -> 'a')
+  let state = Directory ("/" , [])
 
-  let next_state file_name s = match file_name with
-    | File_exists -> List.mem file_name s
+  let next_state file_name fs = match file_name with
+    | File_exists file_name -> List.mem file_name 
+    | Remove ()     -> 
+    | Mkdir (f_name, perm) -> 
 
   let init_sut () = Sys.mkdir 
 
@@ -37,10 +46,20 @@ struct
     | _ -> true
 
   let run c file_name = match c with
-    | File_exists       -> Res (bool, Sys.file_exists file_name)
+    | File_exists          -> Res (bool, Sys.file_exists file_name)
+    | Remove f_name        -> Res (result unit exn, Sys.remove f_name)
+    | Mkdir (f_name, perm) -> Res (result unit exn, Sys.mkdir  f_name perm)
 
   let postcond c (s:char list) res = match c, res with
     | File_exists, Res ((Int,_),i) -> i = List.length s
+    | Remove, Res ((Result (Unit,Exn),_),r) -> 
+      if 
+        then r = Error (Sys_error ":(")
+        else r = Ok ()
+    | Mkdir, Res ((Result (Unit,Exn),_),r) ->
+      if 
+        then r = Error (Sys_error ":(")
+        else r = Ok ()
     | _, _ -> false
 end
 
