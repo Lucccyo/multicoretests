@@ -3,16 +3,10 @@ open STM
 
 module SConf = 
 struct
-
-  type buf_error = {
-    mutable file_exists: bool; 
-    mutable permission_denied: bool; 
-    mutable no_such_file_or_directory: bool
-  }[@@deriving show { with_path = false }]
   
   type cmd =
     (* | File_exists of string list * string *)
-    | Mkdir of string list * string * int * buf_error
+    | Mkdir of string list * string * int 
     [@@deriving show { with_path = false }]
 
   type filesys = 
@@ -32,63 +26,80 @@ struct
 
   let arb_cmd _s =
       let  str_gen = Gen.(oneofl ["aaa"]) in
-      let path_gen = Gen.(oneofl [["/root"]]) in
+      let path_gen = Gen.(oneofl [["/rooot"]]) in
       let perm_gen = Gen.(oneofl [0o777]) in
-      let errors = {file_exists = false; permission_denied = false; no_such_file_or_directory = false} in 
       QCheck.make ~print:show_cmd 
         Gen.(oneof
               [ 
                  (* map2 (fun path file_name -> File_exists (path, file_name))path_gen str_gen; *)
-                 map3 (fun path dir_name perm -> Mkdir (path, dir_name, perm, errors)) path_gen str_gen perm_gen;
+                 map3 (fun path dir_name perm -> Mkdir (path, dir_name, perm)) path_gen str_gen perm_gen;
               ])
 
   let static_path = (Sys.getcwd ()) ^ "/sandbox"
 
   let init_state  = Directory {perm = 0o777; dir_name = "/root"; dir_list = []}
 
-  let rec find (fs_list: filesys list) path name e = match fs_list with  
+  let rec find (fs_list: filesys list) path name = match fs_list with  
       | hd :: tl -> 
         (match hd with
-          | Directory d -> Format.printf "size dir_list in %s : %d\n" d.dir_name (List.length d.dir_list);
-            Format.printf "%s--" d.dir_name;
+          | Directory d -> 
+            (* Format.printf "size dir_list in %s : %d\n" d.dir_name (List.length d.dir_list);
+            Format.printf "%s--" d.dir_name; *)
               if path = [] 
                 then (if d.dir_name = name 
-                        then (Format.printf "1- FOUND\n";Some hd)
-                        else (e.no_such_file_or_directory <- true; None;))
+                        then (
+                          (* Format.printf "1- FOUND\n"; *)
+                          Some hd)
+                        else (None;))
                 else (if d.dir_name = List.hd path
-                        then (Format.printf "PERM\n"; find d.dir_list (List.tl path) name e)
-                        else find tl path name e)
-          | File f -> Format.printf "file : %s\n" f.file_name; 
+                        then (
+                          (* Format.printf "PERM\n"; *)
+                          find d.dir_list (List.tl path) name)
+                        else find tl path name)
+          | File f -> 
+            (* Format.printf "file : %s\n" f.file_name;  *)
                     if path = [] && f.file_name = name 
-                      then (Format.printf "2- FOUND\n"; Some hd) 
-                      else ( e.no_such_file_or_directory <- true; None))
-      | []      ->  e.no_such_file_or_directory <- true; None
+                      then (
+                        (* Format.printf "2- FOUND\n";  *)
+                        Some hd) 
+                      else ( 
+                        (* Format.printf "NwO !!!\n";  *)
+                        None))
+      | []      ->  
+        (* Format.printf "NOww !!!\n"; *)
+       None
 
-  let rec mkdir (fs_list: filesys list) (path: string list) new_dir_name perm e = 
+  let rec mkdir (fs_list: filesys list) (path: string list) new_dir_name perm = 
     match fs_list with  
       | hd :: tl -> 
         (match hd with
-          | Directory d -> Format.printf "STATUS >>> dir_actual : %s\ttaille dir_list : %d\tet le path taille : %d et y'a : %s\n" d.dir_name (List.length d.dir_list) (List.length path) (List.hd path);
+          | Directory d -> 
+            (* Format.printf "STATUS >>> dir_actual : %s\ttaille dir_list : %d\tet le path taille : %d et y'a : %s\n" d.dir_name (List.length d.dir_list) (List.length path) (List.hd path); *)
               if ((List.hd path) = d.dir_name) && (List.length path = 1) 
-                then ( Format.printf "VICTOIRE !!!\n";
+                then ( 
+                  (* Format.printf "VICTOIRE !!!\n"; *)
                   d.dir_list <- (List.cons (Directory {perm; dir_name = new_dir_name; dir_list = []}) d.dir_list); Some 1)
                 else if (List.hd path) = d.dir_name 
-                  then (Format.printf "LA SUITE >>> \n"; mkdir d.dir_list (List.tl path) new_dir_name perm e)
-                  else mkdir tl path new_dir_name perm e
-          | File _ -> e.no_such_file_or_directory <- true; None)
-      | []      ->  e.no_such_file_or_directory <- true; None
+                  then (
+                    (* Format.printf "LA SUITE >>> \n";  *)
+                    mkdir d.dir_list (List.tl path) new_dir_name perm)
+                  else mkdir tl path new_dir_name perm
+          | File _ -> 
+            (* Format.printf "NO1\n";  *)
+          None)
+      | []      ->  
+        (* Format.printf "NO2\n";  *)
+      None
     
   let next_state c fs = 
     match c with
       (* | File_exists (path, file_name) -> 
         Format.printf "path : ("; List.iter (Format.printf "%s ") path; Format.printf ")\t file_name : %s\n" file_name;
         fs *)
-      | Mkdir (path, dir_name, perm, errors)  ->
-        (match find [fs] path dir_name errors with
-          | Some _ -> Format.printf "%s already exists\n" dir_name; fs
-          | None   -> Format.printf "%s doesn't exists\n" dir_name;
-                      Format.printf "ON ENVOIE A MKDIR >>> tete de path : %s\t dirname : %s\n"(List.hd path) dir_name; 
-                      (match mkdir [fs] path dir_name perm errors with
+      | Mkdir (path, dir_name, perm)  -> 
+        (match find [fs] path dir_name with
+          | Some _ -> fs
+          | None   -> (match mkdir [fs] path dir_name perm with
                         | Some _ -> fs
                         | None -> fs))
 
@@ -105,25 +116,25 @@ struct
   let run c _file_name = match c with
       (* | File_exists (path_name, file_name) -> Format.printf "RUN : %s\n" (static_path  ^ (String.concat "/" path_name) ^ "/" ^ file_name);
           Res (bool, Sys.file_exists (static_path ^ (String.concat "/" path_name) ^ "/" ^ file_name)) *)
-      | Mkdir (path, dir_name, perm, _) -> Res (result unit exn, protect (Sys.mkdir (static_path ^ (String.concat "/" path) ^ "/" ^ dir_name))perm)
+      | Mkdir (path, dir_name, perm) -> 
+        (* Format.printf "BOUH\n"; *)
+        Res (result unit exn, protect (Sys.mkdir (static_path ^ (String.concat "/" path) ^ "/" ^ dir_name))perm)
 
-  (* let filexists s path file_name = 
-    let e = {file_exists = false; permission_denied = false; no_such_file_or_directory = false} in
-      match (find [s] path file_name e) with 
+  let filexists s path file_name = 
+      match (find [s] path file_name) with 
         | Some _ -> true
-        | None   -> false *)
+        | None   -> false
 
-  let postcond c (_s:filesys) res = match c, res with
+  let postcond c (s:filesys) res = match c, res with
       (* | File_exists (path_name, file_name), Res ((Bool,_),b) -> Format.printf "RUN RES : %b" b;
         b = filexists s path_name file_name *)
-      | Mkdir (_path, dir_name, _perm, errors), Res ((Result (Unit,Exn),_),r) ->
-          if errors.file_exists 
-            then r = Error (Sys_error (static_path ^ "/root" ^ "/" ^ dir_name ^ ": File exists"))
-            else if errors.permission_denied
-                  then r = Error (Sys_error (static_path ^ "/root" ^ "/" ^ dir_name ^ ": Permission denied"))
-                  else if errors.no_such_file_or_directory
-                          then r = Error (Sys_error (static_path ^ "/root" ^ "/" ^ dir_name ^ ": No such file or directory"))
-                          else r = Ok ()
+      | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_),r) -> 
+        (* Format.printf "%s\n" (static_path ^ "/root" ^ "/" ^ dir_name ^ ": File exists"); *)
+        let p = String.concat "/" path in
+        if not (filexists s path dir_name)
+          then r = Error (Sys_error (static_path ^ p ^ "/" ^ dir_name ^ ": No such file or directory")) 
+          else r = Ok ()
+        
       | _,_ -> false
 end
 
