@@ -150,6 +150,7 @@ struct
       (fun acc (c,r) -> Printf.sprintf "%s\n   %s : %s" acc (Spec.show_cmd c) (show_res r))
       "" trace
 
+<<<<<<< HEAD
   let agree_prop cs =
     assume (cmds_ok Spec.init_state cs);
     let sut = Spec.init_sut () in (* reset system's state *)
@@ -165,6 +166,25 @@ struct
       let ()  = Spec.cleanup sut in
       Test.fail_reportf "  Agreement check raised exception: %s\n%s" (Printexc.to_string e)
         (print_seq_trace_no_results cs)
+=======
+  let agree_prop =
+    (fun cs ->
+       assume (cmds_ok Spec.init_state cs);
+       let sut = Spec.init_sut () in (* reset system's state *)
+       let res = check_disagree Spec.init_state sut cs in
+       let ()  = Spec.cleanup sut in
+       match res with
+       | None -> true
+       | Some trace ->
+           Test.fail_reportf "  Results incompatible with model\n%s"
+           @@ print_seq_trace trace
+
+
+    )
+  (** The agreement property: the command sequence [cs] yields the same observations
+      when interpreted from the model's initial state and the [sut]'s initial state.
+      Cleans up after itself by calling [Spec.cleanup] *)
+>>>>>>> 0e01b4a (mkdir and fileexist tests)
 
   let agree_test ~count ~name =
     Test.make ~name ~count (arb_cmds Spec.init_state) agree_prop
