@@ -5,14 +5,14 @@
 (alias
  (name default)
  (package multicoretests)
- (deps stm_tests.exe lin_tests.exe lin_tests_dsl.exe))
+ (deps stm_tests.exe))
 
 (executable
  (name stm_tests)
  (modules stm_tests)
  (libraries STM)
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.eq)))
+  (pps ppx_deriving.show)))
 
 (rule
  (alias runtest)
