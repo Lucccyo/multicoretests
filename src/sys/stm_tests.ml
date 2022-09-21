@@ -25,7 +25,7 @@ struct
   
   let arb_cmd _s  =
     let  str_gen = Gen.(oneofl ["a";"b";"c"]) in
-    let path_gen = Gen.(oneofl [["/root"]]) in
+    let path_gen = Gen.(oneofl [["/root/bbb"]]) in
     (* let perm_gen = Gen.map3 (fun d1 d2 d3 -> ( let n = d1*100 + d2*10 + d3*1 in Format.printf "perm generated : %d\n" n; n) ) (Gen.int_bound 7) (Gen.int_bound 7) (Gen.int_bound 7) in *)
     let perm_gen =  Gen.(oneofl [0o777]) in
     QCheck.make ~print:show_cmd 
@@ -47,13 +47,13 @@ struct
 
   let rec is_perm_ok (fsl: filesys list) path = 
     match fsl with
-    | [] -> Format.printf "____vide est autorisé\n"; false 
+    | [] -> false 
     | Directory d :: tl -> (match path with
-      | [] -> Format.printf "____%s est autorisé\n" d.dir_name;true
+      | [] -> true
       | hd_path :: tl_path -> if d.dir_name = hd_path
         then if d.perm > 447
              then is_perm_ok d.fs_list tl_path
-             else (Format.printf "____%s est interdit\n" d.dir_name; false)
+             else false
         else is_perm_ok tl path
       )
     | File f :: tl -> (match path with
@@ -103,15 +103,6 @@ struct
       | None   -> List.hd (mkdir [fs] path dir_name perm))
 
   let reset_root path = Sys.command ("rm -r -d -f " ^ path)
-    (* if Sys.file_exists path
-    then (let sub_dir = (Sys.readdir path) in
-      if not (Array.length sub_dir = 0) 
-      then (
-        try Array.iter (fun name -> reset_root (path ^ "/" ^ name)) sub_dir; 
-          Unix.rmdir path
-        with Sys_error _ -> Unix.rmdir path)
-      else Unix.rmdir path)
-    else () *)
 
   let init_sut () = try 
       Sys.mkdir (static_path ^ "/root") 0o777;
@@ -120,7 +111,7 @@ struct
       Sys.mkdir (static_path ^ "/root/bbb/lb") 0o777;
     with Sys_error _ -> ()
 
-  let cleanup _   = ignore (reset_root (static_path ^ "/root")); init_sut ()
+  let cleanup _   = ignore (reset_root (static_path ^ "/root"))
 
   let precond _c _s = true 
 
@@ -139,7 +130,7 @@ struct
     | File_exists (path, name), Res ((Bool,_),b) -> b = file_exists fs path name
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = static_path ^ (String.concat "/" path) ^ "/" ^ dir_name ^ ": Permission denied"         -> 
-        false
+        not (is_perm_ok [fs] path)
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = static_path ^ (String.concat "/" path) ^ "/" ^ dir_name ^ ": File exists"               -> 
         file_exists fs path dir_name
