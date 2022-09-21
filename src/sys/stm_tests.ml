@@ -24,9 +24,10 @@ struct
   type sut   = unit  
   
   let arb_cmd _s  =
-    let  str_gen = Gen.(oneofl ["bbb";"aaa";"ccc"]) in
+    let  str_gen = Gen.(oneofl ["a";"b";"c"]) in
     let path_gen = Gen.(oneofl [["/root"]]) in
-    let perm_gen = Gen.(oneofl [0o777]) in
+    (* let perm_gen = Gen.map3 (fun d1 d2 d3 -> ( let n = d1*100 + d2*10 + d3*1 in Format.printf "perm generated : %d\n" n; n) ) (Gen.int_bound 7) (Gen.int_bound 7) (Gen.int_bound 7) in *)
+    let perm_gen =  Gen.(oneofl [0o777]) in
     QCheck.make ~print:show_cmd 
       Gen.(oneof
             [ 
@@ -36,86 +37,120 @@ struct
 
   let static_path = (Sys.getcwd ()) ^ "/sandbox"
 
-  let init_state  = Directory {perm = 0o777; dir_name = "/root"; fs_list = []}
+  let init_state  = 
+    Directory {perm = 0o777; dir_name = "/root"; fs_list = [
+      Directory {perm = 0o700; dir_name = "aaa"; fs_list = []};
+      Directory {perm = 0o000; dir_name = "bbb"; fs_list = [
+        Directory {perm = 0o777; dir_name = "lb"; fs_list = []}
+      ]}
+    ]}
 
-let rec find (fsl: filesys list) path name = 
-  match fsl with 
-  | [] -> None 
-  | Directory d :: tl -> 
-    (match path with
-    | [] -> if d.dir_name = name 
-              then Some (Directory d)
-              else find tl path name
-    | hd_path :: tl_path -> if d.dir_name = hd_path
-                then find d.fs_list tl_path name
-                else find tl path name)
-  | File f :: _tl -> if path = [] && f.file_name = name 
-      then  Some (File f)
-      else None
+  let rec is_perm_ok (fsl: filesys list) path = 
+    match fsl with
+    | [] -> Format.printf "____vide est autorisé\n"; false 
+    | Directory d :: tl -> (match path with
+      | [] -> Format.printf "____%s est autorisé\n" d.dir_name;true
+      | hd_path :: tl_path -> if d.dir_name = hd_path
+        then if d.perm > 447
+             then is_perm_ok d.fs_list tl_path
+             else (Format.printf "____%s est interdit\n" d.dir_name; false)
+        else is_perm_ok tl path
+      )
+    | File f :: tl -> (match path with
+      | [] -> true
+      | hd_path :: _tl_path -> if f.file_name = hd_path
+        then (assert (List.length path = 1); true)
+        else is_perm_ok tl path
+      )
+
+  let rec find (fsl: filesys list) path name = 
+    match fsl with 
+    | [] -> None 
+    | Directory d :: tl -> (match path with
+      | [] -> if d.dir_name = name 
+        then Some (Directory d)
+        else find tl path name
+      | hd_path :: tl_path -> if d.dir_name = hd_path
+        then if d.perm > 447
+             then find d.fs_list tl_path name
+             else (Format.printf "2 PERM DENIED\n"; None)
+        else find tl path name)
+    | File f :: _tl -> if path = [] && f.file_name = name 
+        then Some (File f)
+        else None
 
   let rec mkdir (fsl: filesys list) path dir_name perm = match fsl with
     | [] -> []
     | Directory d :: tl -> (match path with
-        | hd_path :: tl_path -> if (hd_path = d.dir_name) && (List.length path = 1)
+      | hd_path :: tl_path -> if (hd_path = d.dir_name) && (List.length path = 1)
+        then (
+          if perm > 447
           then (
             let update = Directory {d with fs_list = (Directory {perm; dir_name; fs_list = []} :: d.fs_list)} in
-              update :: [])
-          else if hd_path = d.dir_name 
-                then Directory {d with fs_list = (mkdir d.fs_list tl_path dir_name perm)} :: []
-                else Directory d :: (mkdir tl path dir_name perm)
-        | _ -> [])
-    | File f :: tl     -> File f :: (mkdir tl path dir_name perm)
+            update :: [])
+          else (Format.printf "1 PERM DENIED\n"; Directory d :: []))
+        else if hd_path = d.dir_name 
+             then Directory {d with fs_list = (mkdir d.fs_list tl_path dir_name perm)} :: []
+             else Directory d :: (mkdir tl path dir_name perm)
+      | _ -> [])
+    | File f :: tl -> File f :: (mkdir tl path dir_name perm)
     
   let next_state c fs = 
     match c with
     | File_exists (_path, _name) -> fs
-    | Mkdir (path, dir_name, perm) -> 
-      (match find [fs] path dir_name with
-        | Some _ -> fs
-        | None   -> List.hd (mkdir [fs] path dir_name perm))
+    | Mkdir (path, dir_name, perm) -> (match find [fs] path dir_name with
+      | Some _ -> fs
+      | None   -> List.hd (mkdir [fs] path dir_name perm))
 
-  let reset_root path = 
-    if Sys.file_exists path then (
-      let sub_dir = (Sys.readdir path) in
+  let reset_root path = Sys.command ("rm -r -d -f " ^ path)
+    (* if Sys.file_exists path
+    then (let sub_dir = (Sys.readdir path) in
       if not (Array.length sub_dir = 0) 
-        then ( 
-          Array.iter (fun name -> Unix.rmdir (path ^ "/" ^ name)) sub_dir; 
-          Unix.rmdir path)
-        else Unix.rmdir path)
-    else ()
+      then (
+        try Array.iter (fun name -> reset_root (path ^ "/" ^ name)) sub_dir; 
+          Unix.rmdir path
+        with Sys_error _ -> Unix.rmdir path)
+      else Unix.rmdir path)
+    else () *)
 
-  let init_sut () = try Sys.mkdir (static_path ^ "/root") 0o777 with Sys_error _ -> ()
+  let init_sut () = try 
+      Sys.mkdir (static_path ^ "/root") 0o777;
+      Sys.mkdir (static_path ^ "/root/aaa") 0o700;
+      Sys.mkdir (static_path ^ "/root/bbb") 0o000;
+      Sys.mkdir (static_path ^ "/root/bbb/lb") 0o777;
+    with Sys_error _ -> ()
 
-  let cleanup _   = reset_root (static_path ^ "/root")
+  let cleanup _   = ignore (reset_root (static_path ^ "/root")); init_sut ()
 
-  let precond c _s = match c with
-      | _ -> true
+  let precond _c _s = true 
 
   let run c _file_name = match c with
-      | File_exists (path, name) -> Res (bool, Sys.file_exists (static_path ^ (String.concat "/" path) ^ "/" ^ name))
-      | Mkdir (path, dir_name, perm) -> 
-          Res (result unit exn, protect (Sys.mkdir (static_path ^ (String.concat "/" path) ^ "/" ^ dir_name))perm)
+    | File_exists (path, name) -> Res (bool, Sys.file_exists (static_path ^ (String.concat "/" path) ^ "/" ^ name))
+    | Mkdir (path, dir_name, perm) -> 
+      Res (result unit exn, protect (Sys.mkdir (static_path ^ (String.concat "/" path) ^ "/" ^ dir_name))perm)
 
   let file_exists (fs: filesys) path name = 
-      match (find [fs] path name) with 
-        | Some _ -> true
-        | None   -> false
+    match (find [fs] path name) with 
+    | Some _ -> true
+    | None   -> false
 
   let postcond c (fs: filesys) res = 
-  match c, res with
-      | File_exists (path, name), Res ((Bool,_),b) -> b = file_exists fs path name
-      | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_),r) -> 
+    match c, res with
+    | File_exists (path, name), Res ((Bool,_),b) -> b = file_exists fs path name
+    | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
+      when s = static_path ^ (String.concat "/" path) ^ "/" ^ dir_name ^ ": Permission denied"         -> 
+        false
+    | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
+      when s = static_path ^ (String.concat "/" path) ^ "/" ^ dir_name ^ ": File exists"               -> 
+        file_exists fs path dir_name
+    | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
+      when s = static_path ^ (String.concat "/" path) ^ "/" ^ dir_name ^ ": No such file or directory" -> 
         (match path with
-            | hd_path :: tl_path -> 
-                let p = String.concat "/" path in
-                if not (file_exists fs tl_path hd_path)
-                  then(r = Error (Sys_error (static_path ^ p ^ "/" ^ dir_name ^ ": No such file or directory")))
-                  else (if file_exists fs path dir_name
-                          then(r = Error (Sys_error (static_path ^ p ^ "/" ^ dir_name ^ ": File exists")))
-                          else (r = Ok ()))
-
-            | _ -> r = Error (Sys_error (static_path ^ ( String.concat "/" path) ^ "/" ^ dir_name ^ ": No such file or directory")))
-      | _,_ -> false
+        | [] -> true
+        | hd_path :: tl_path -> not (file_exists fs tl_path hd_path))
+    | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), Ok ()) -> true
+    | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), _r) -> assert(false)
+    | _,_ -> false
 end
 
 module SysSTM = STM.Make(SConf)
@@ -126,5 +161,5 @@ Util.set_ci_printing ()
 QCheck_base_runner.run_tests_main
   (let count = 1000 in
    [SysSTM.agree_test         ~count ~name:"STM Sys test sequential";
-   SysSTM.agree_test_par ~count ~name:"STM Sys test parallel"
+   (* SysSTM.agree_test_par ~count ~name:"STM Sys test parallel" *)
 ])
