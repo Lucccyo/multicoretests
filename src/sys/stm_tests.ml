@@ -60,25 +60,6 @@ struct
         else is_perm_ok tl path
       )
 
-  (* let rec find (fsl: filesys list) path name = 
-    match fsl with 
-    | [] -> None 
-    | Directory d :: tl ->
-    (match path with
-      | [] -> if d.dir_name = name 
-        then Some (Directory d)
-        else find tl path name
-      | hd_path :: tl_path -> if d.dir_name = hd_path
-        then if d.perm > 447
-            then find d.fs_list tl_path name
-            else None
-        else find tl path name)
-    | File f :: _tl -> if path = [] && f.file_name = name 
-      then Some (File f)
-      else None *)
-
-
-
   let rec find fs path name = 
     match fs with 
     | File f      -> path = [] && f.file_name = name 
@@ -90,23 +71,6 @@ struct
         then List.exists (fun f -> find f tl name) d.fs_list 
         else false
 
-(* let rec mkdir (fsl: filesys list) path dir_name perm = 
-  match fsl with
-  | [] -> []
-  | Directory d :: tl -> (match path with
-    | hd_path :: tl_path -> 
-      if (hd_path = d.dir_name) && (List.length path = 1)
-      then (
-        if perm > 447
-        then (let update = Directory {d with fs_list = 
-            (Directory {perm; dir_name; fs_list = []} :: d.fs_list)} in
-          update :: tl)
-        else ( Directory d :: []))
-      else if hd_path = d.dir_name 
-           then Directory {d with fs_list = (mkdir d.fs_list tl_path dir_name perm)} :: []
-           else Directory d :: (mkdir tl path dir_name perm)
-    | _ -> [])
-  | File f :: tl -> File f :: (mkdir tl path dir_name perm) *)
   let get_name fs =
     match fs with
     | File f -> f.file_name
@@ -126,7 +90,6 @@ struct
         then Directory {d with fs_list = List.map (fun f -> mkdir f tl dir_name perm) d.fs_list}
         else fs
 
-    
   let next_state c fs = 
     match c with
     | File_exists (_path, _name)   -> fs
@@ -134,27 +97,14 @@ struct
       if find fs path dir_name
       then fs
       else mkdir fs path dir_name perm
-    (* | Mkdir (path, dir_name, perm) -> (match find fs path dir_name with
-      | Some _ -> fs
-      | None   -> (match path with 
-        | _hd :: _tl -> let rev = List.rev path in
-          (match find [fs] (List.rev (List.tl rev)) (List.hd rev) with
-          | Some _ -> mkdir fs path dir_name perm 
-          | None   -> fs)
-        | _ -> Format.printf "Bonjour\n"; fs)) *)
 
   let reset_root path = Sys.command ("rm -r -d -f " ^ path ^ " && sync")
 
-  let init_sut () = let content = Array.to_list (Sys.readdir (static_path)) in
-    Format.printf "[initsut] content : %s\n%!" (String.concat " " content);
+  let init_sut () = 
     try Sys.mkdir (static_path ^ "/" ^ "root") 0o777 with Sys_error _ -> ()
 
   let cleanup _   = 
-    Format.printf "___cleanup___\n";
-    ignore (reset_root (static_path ^ "/" ^ "root"));
-    let content = Array.to_list (Sys.readdir (static_path)) in
-    Format.printf "[cleanup] content : %s\n%!" (String.concat " " content)
-
+    ignore (reset_root (static_path ^ "/" ^ "root"))
 
   let precond _c _s = true 
 
@@ -167,7 +117,7 @@ struct
 
   let postcond c (fs: filesys) res = 
     let p path dir_name = static_path ^ "/" ^ (String.concat "/" path) ^ "/" ^ dir_name in
-    Format.printf "\n\ncmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs);
+    (* Format.printf "\n\ncmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c, res with
     | File_exists (path, name), Res ((Bool,_),b) -> 
            b = file_exists fs path name
@@ -180,13 +130,7 @@ struct
 
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
-        Format.printf "---- %s existe deja\t\t\n\n 1\t fs = %s\n\n" dir_name (show_filesys fs);
         let b = file_exists fs path dir_name in
-        (* Format.printf "taille de fsstr : %d \t\test ce que le dossier est deja dans state ? %b\n" (String.length) b; *)
-        if not b then 
-          (
-            Format.printf "\n AAAAAAAAAAAAAAAAAAAAAAAAAH c = %s\n\n" (show_cmd c)
-          );
         assert (b);
         b
 
@@ -218,7 +162,7 @@ module SysSTM = STM.Make(SConf)
 Util.set_ci_printing ()
 ;;
 QCheck_base_runner.run_tests_main
-  (let count = 10 in
+  (let count = 1000 in
    [SysSTM.agree_test         ~count ~name:"STM Sys test sequential";
    (* SysSTM.neg_agree_test_par ~count ~name:"STM Sys test parallel" *)
 ])
