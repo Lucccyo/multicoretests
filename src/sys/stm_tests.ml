@@ -109,6 +109,7 @@ struct
   let reset_root path = Sys.command ("rm -r -d -f " ^ path ^ " && sync")
 
   let init_sut () = 
+    try Sys.mkdir static_path 0o777 with Sys_error _ -> ();
     try Sys.mkdir (static_path ^ "/" ^ "root") 0o777 with Sys_error _ -> ()
 
   let cleanup _   = 
