@@ -62,7 +62,7 @@ struct
         else is_perm_ok tl path
       )
 
-  let rec find fs path name = 
+  let rec mem fs path name = 
     match fs with 
     | File f      -> path = [] && f.file_name = name 
     | Directory d -> 
@@ -70,7 +70,7 @@ struct
       | []       -> name = d.dir_name
       | hd :: tl -> 
         if hd = d.dir_name
-        then List.exists (fun f -> find f tl name) d.fs_list 
+        then List.exists (fun f -> mem f tl name) d.fs_list 
         else false
 
   let get_name fs =
@@ -103,10 +103,9 @@ struct
     match c with
     | File_exists (_path, _name)   -> fs
     | Mkdir (path, dir_name, perm) -> 
-      if find fs path dir_name
+      if mem fs path dir_name
       then fs
       else mkdir fs path dir_name perm
-
 
   let init_sut () = 
     try Sys.mkdir static_path 0o777 with Sys_error _ -> ();
@@ -121,43 +120,37 @@ struct
     | Mkdir (path, dir_name, perm) -> 
       Res (result unit exn, protect (Sys.mkdir (static_path / (List.fold_left (/) "" path) / dir_name))perm)
 
-  let file_exists (fs: filesys) path name = find fs path name 
-
   let postcond c (fs: filesys) res = 
     let p path dir_name = static_path / (String.concat "/" path) / dir_name in
     match c, res with
     | File_exists (path, name), Res ((Bool,_),b) -> 
-           b = file_exists fs path name
-
+           b = mem fs path name
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": Permission denied"         -> 
         let b = not (is_perm_ok [fs] path) in
         assert (b);
         b
-
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
-        let b = file_exists fs path dir_name in
+        let b = mem fs path dir_name in
         assert (b);
         b
-
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": No such file or directory" -> 
         let b = (match path with
         | [] -> false
         | _hd_path :: _tl_path -> 
           let rev = List.rev path in
-          not (file_exists fs (List.rev (List.tl rev)) (List.hd rev))) in
+          not (mem fs (List.rev (List.tl rev)) (List.hd rev))) in
         assert (b);
         b
-
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Ok ()) -> 
       assert (is_perm_ok [fs] path); (*good perm*)
-      assert (not (file_exists fs path dir_name)); (*not already exists*)
+      assert (not (mem fs path dir_name)); (*not already exists*)
       assert (match path with (*path is good*)
         | [] -> true
         | _hd_path :: _tl_path -> let rev = List.rev path in
-          file_exists fs (List.rev (List.tl rev)) (List.hd rev)); 
+          mem fs (List.rev (List.tl rev)) (List.hd rev)); 
       true
     | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), _r) -> assert(false)
     | _,_ -> false
