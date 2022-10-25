@@ -100,7 +100,6 @@ struct
         else fs
 
   let next_state c fs = 
-    (* Format.printf "\n\nnextstate::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c with
     | File_exists (_path, _name)   -> fs
     | Mkdir (path, dir_name, perm) -> 
@@ -126,7 +125,6 @@ struct
 
   let postcond c (fs: filesys) res = 
     let p path dir_name = static_path / (String.concat "/" path) / dir_name in
-    (* Format.printf "\n\npostcond::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c, res with
     | File_exists (path, name), Res ((Bool,_),b) -> 
            b = file_exists fs path name
@@ -139,9 +137,8 @@ struct
 
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
-        (* Format.printf "\n\npostcond::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
         let b = file_exists fs path dir_name in
-        (* assert (b); *)
+        assert (b);
         b
 
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
