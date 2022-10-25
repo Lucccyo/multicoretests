@@ -23,6 +23,8 @@ struct
   
   type sut   = unit  
   
+  let (/) = Filename.concat
+
   let arb_cmd _s  =
     let  str_gen = Gen.(oneofl ["c"; "e"; "r"]) in
     let  name_gen = Gen.(oneofl ["aaa" ; "bbb" ; "ccc" ; "ddd" ; "eee"]) in
@@ -37,7 +39,7 @@ struct
                 map3 (fun path dir_name perm -> Mkdir (path, dir_name, perm)) path_gen str_gen perm_gen;
             ])
 
-  let static_path = (Sys.getcwd ()) ^ "/sandbox"
+  let static_path = Sys.getcwd () / "sandbox"
 
   let init_state  = 
     Directory {perm = 0o777; dir_name = "root"; fs_list = []}
@@ -106,27 +108,24 @@ struct
       then fs
       else mkdir fs path dir_name perm
 
-  let reset_root path = Sys.command ("rm -r -d -f " ^ path ^ " && sync")
 
   let init_sut () = 
     try Sys.mkdir static_path 0o777 with Sys_error _ -> ();
-    try Sys.mkdir (static_path ^ "/" ^ "root") 0o777 with Sys_error _ -> ()
+    try Sys.mkdir (static_path / "root") 0o777 with Sys_error _ -> ()
 
-  let cleanup _   = 
-  (* Format.printf "CLEANUP"; *)
-    ignore (reset_root (static_path ^ "/" ^ "root"))
+  let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "root") ^ " && sync"))
 
   let precond _c _s = true 
 
   let run c _file_name = match c with
-    | File_exists (path, name) -> Res (bool, Sys.file_exists (static_path ^ "/" ^ (String.concat "/" path) ^ "/" ^ name))
+    | File_exists (path, name) -> Res (bool, Sys.file_exists (static_path / (List.fold_left (/) "" path) / name))
     | Mkdir (path, dir_name, perm) -> 
-      Res (result unit exn, protect (Sys.mkdir (static_path ^ "/" ^ (String.concat "/" path) ^ "/" ^ dir_name))perm)
+      Res (result unit exn, protect (Sys.mkdir (static_path / (List.fold_left (/) "" path) / dir_name))perm)
 
   let file_exists (fs: filesys) path name = find fs path name 
 
   let postcond c (fs: filesys) res = 
-    let p path dir_name = static_path ^ "/" ^ (String.concat "/" path) ^ "/" ^ dir_name in
+    let p path dir_name = static_path / (String.concat "/" path) / dir_name in
     (* Format.printf "\n\npostcond::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c, res with
     | File_exists (path, name), Res ((Bool,_),b) -> 
