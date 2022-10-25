@@ -25,9 +25,9 @@ struct
   
   let arb_cmd _s  =
     let  str_gen = Gen.(oneofl ["c"; "e"; "r"]) in
-    (* let  name_gen = Gen.(oneofl ["aaa" ; "bbb" ; "ccc" ; "ddd" ; "eee"]) in *)
-    let path_gen = Gen.(oneofl [["root"] ; ["root"; "c"] ; ["root" ; "c" ; "e"] ; ["root" ; "r" ; "r"]]) in
-    (* let path_gen = Gen.map (fun path -> "root" :: path) (Gen.list_size (Gen.int_bound 5) str_gen) in *)
+    let  name_gen = Gen.(oneofl ["aaa" ; "bbb" ; "ccc" ; "ddd" ; "eee"]) in
+    (* let path_gen = Gen.(oneofl [["root"] ; ["root"; "c"] ; ["root" ; "c" ; "e"] ; ["root" ; "r" ; "r"]]) in *)
+    let path_gen = Gen.map (fun path -> "root" :: path) (Gen.list_size (Gen.int_bound 5) name_gen) in
     let perm_gen = Gen.(oneofl [0o777]) in
     (* let perm_gen = Gen.map3 (fun d1 d2 d3 -> d1*100 + d2*10 + d3*1) (Gen.int_bound 7) (Gen.int_bound 7) (Gen.int_bound 7) in *)
     QCheck.make ~print:show_cmd 
@@ -85,12 +85,20 @@ struct
         if List.exists (fun fs -> get_name fs = dir_name) d.fs_list
         then fs
         else Directory {d with fs_list = (Directory {perm; dir_name; fs_list = []} :: d.fs_list)}
+      | hd :: [] ->
+        if hd = d.dir_name
+        then (
+          if List.exists (fun fs -> get_name fs = dir_name) d.fs_list
+          then fs
+          else Directory {d with fs_list = (Directory {perm; dir_name; fs_list = []} :: d.fs_list)})
+        else fs
       | hd :: tl -> 
         if hd = d.dir_name
         then Directory {d with fs_list = List.map (fun f -> mkdir f tl dir_name perm) d.fs_list}
         else fs
 
   let next_state c fs = 
+    (* Format.printf "\n\nnextstate::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c with
     | File_exists (_path, _name)   -> fs
     | Mkdir (path, dir_name, perm) -> 
@@ -104,6 +112,7 @@ struct
     try Sys.mkdir (static_path ^ "/" ^ "root") 0o777 with Sys_error _ -> ()
 
   let cleanup _   = 
+  (* Format.printf "CLEANUP"; *)
     ignore (reset_root (static_path ^ "/" ^ "root"))
 
   let precond _c _s = true 
@@ -117,7 +126,7 @@ struct
 
   let postcond c (fs: filesys) res = 
     let p path dir_name = static_path ^ "/" ^ (String.concat "/" path) ^ "/" ^ dir_name in
-    (* Format.printf "\n\ncmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
+    (* Format.printf "\n\npostcond::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
     match c, res with
     | File_exists (path, name), Res ((Bool,_),b) -> 
            b = file_exists fs path name
@@ -130,8 +139,9 @@ struct
 
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
+        (* Format.printf "\n\npostcond::cmd : %s \t\tfs : %s\n" (show_cmd c) (show_filesys fs); *)
         let b = file_exists fs path dir_name in
-        assert (b);
+        (* assert (b); *)
         b
 
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
