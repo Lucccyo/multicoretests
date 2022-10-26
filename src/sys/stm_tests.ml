@@ -107,9 +107,7 @@ struct
       then fs
       else mkdir fs path dir_name perm
 
-  let init_sut () = 
-    (* try Sys.mkdir static_path 0o777 with Sys_error _ -> (); *)
-    try Sys.mkdir (static_path / "sandbox_root") 0o777 with Sys_error _ -> ()
+  let init_sut () = try Sys.mkdir (static_path / "sandbox_root") 0o777 with Sys_error _ -> ()
 
   let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "sandbox_root")))
 
@@ -127,28 +125,27 @@ struct
            b = mem fs path name
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": Permission denied"         -> 
+        Format.printf "%s\n" (p path dir_name);
         let b = not (is_perm_ok [fs] path) in
-        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
+        Format.printf "%s\n" (p path dir_name);
         let b = mem fs path dir_name in
-        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
-      when s = (p path dir_name) ^ ": No such file or directory" -> 
+      when s = (p path dir_name) ^ ": No such file or directory" ->
+        Format.printf "%s\n" (p path dir_name); 
         let b = (match path with
         | [] -> false
         | _hd_path :: _tl_path -> 
           let rev = List.rev path in
           not (mem fs (List.rev (List.tl rev)) (List.hd rev))) in
-        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Ok ()) -> 
-      (* assert (is_perm_ok [fs] path); good perm *)
-      (* assert (not (mem fs path dir_name)); not already exists *)
+      Format.printf "%s\n" (p path dir_name);
       let b = 
-        match path with (*path is good*)
+        match path with
         | [] -> true
         | _hd_path :: _tl_path -> 
           let rev = List.rev path in
