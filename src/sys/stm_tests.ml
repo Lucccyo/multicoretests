@@ -58,7 +58,7 @@ struct
     | File f :: tl -> (match path with
       | [] -> true
       | hd_path :: _tl_path -> if f.file_name = hd_path
-        then (assert (List.length path = 1); true)
+        then true)
         else is_perm_ok tl path
       )
 
@@ -154,7 +154,7 @@ struct
           let rev = List.rev path in
           mem fs (List.rev (List.tl rev)) (List.hd rev) in
       is_perm_ok [fs] path && not (mem fs path dir_name) && b
-    | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), _r) -> assert(false)
+    | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), _r) -> false
     | _,_ -> false
 end
 
