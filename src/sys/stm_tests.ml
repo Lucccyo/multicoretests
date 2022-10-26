@@ -125,17 +125,20 @@ struct
            b = mem fs path name
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": Permission denied"         -> 
-        Format.printf "%s\n" (p path dir_name);
+        (* Format.printf "%s\n" (p path dir_name); *)
+        Format.printf "%s\n" (String.concat "/" path);
         let b = not (is_perm_ok [fs] path) in
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
-        Format.printf "%s\n" (p path dir_name);
+        Format.printf "%s\n" (String.concat "/" path);
+        (* Format.printf "%s\n" (p path dir_name); *)
         let b = mem fs path dir_name in
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": No such file or directory" ->
-        Format.printf "%s\n" (p path dir_name); 
+        (* Format.printf "%s\n" (p path dir_name);  *)
+        Format.printf "%s\n" (String.concat "/" path);
         let b = (match path with
         | [] -> false
         | _hd_path :: _tl_path -> 
