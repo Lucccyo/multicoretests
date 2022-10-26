@@ -39,7 +39,7 @@ struct
                 map3 (fun path dir_name perm -> Mkdir (path, dir_name, perm)) path_gen str_gen perm_gen;
             ])
 
-  let static_path = Sys.getcwd () / "sandbox"
+  let static_path = Sys.getcwd ()
 
   let init_state  = 
     Directory {perm = 0o777; dir_name = "root"; fs_list = []}
@@ -58,7 +58,7 @@ struct
     | File f :: tl -> (match path with
       | [] -> true
       | hd_path :: _tl_path -> if f.file_name = hd_path
-        then true)
+        then (assert (List.length path = 1); true)
         else is_perm_ok tl path
       )
 
@@ -108,10 +108,10 @@ struct
       else mkdir fs path dir_name perm
 
   let init_sut () = 
-    try Sys.mkdir static_path 0o777 with Sys_error _ -> ();
+    (* try Sys.mkdir static_path 0o777 with Sys_error _ -> (); *)
     try Sys.mkdir (static_path / "root") 0o777 with Sys_error _ -> ()
 
-  let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "root") ^ " && sync"))
+  let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "root")))
 
   let precond _c _s = true 
 
