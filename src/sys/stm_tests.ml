@@ -128,12 +128,12 @@ struct
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": Permission denied"         -> 
         let b = not (is_perm_ok [fs] path) in
-        assert (b);
+        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": File exists"               -> 
         let b = mem fs path dir_name in
-        assert (b);
+        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Error (Sys_error (s) ))
       when s = (p path dir_name) ^ ": No such file or directory" -> 
@@ -142,16 +142,18 @@ struct
         | _hd_path :: _tl_path -> 
           let rev = List.rev path in
           not (mem fs (List.rev (List.tl rev)) (List.hd rev))) in
-        assert (b);
+        (* assert (b); *)
         b
     | Mkdir (path, dir_name, _perm), Res ((Result (Unit,Exn),_), Ok ()) -> 
-      assert (is_perm_ok [fs] path); (*good perm*)
-      assert (not (mem fs path dir_name)); (*not already exists*)
-      assert (match path with (*path is good*)
+      (* assert (is_perm_ok [fs] path); good perm *)
+      (* assert (not (mem fs path dir_name)); not already exists *)
+      let b = 
+        match path with (*path is good*)
         | [] -> true
-        | _hd_path :: _tl_path -> let rev = List.rev path in
-          mem fs (List.rev (List.tl rev)) (List.hd rev)); 
-      true
+        | _hd_path :: _tl_path -> 
+          let rev = List.rev path in
+          mem fs (List.rev (List.tl rev)) (List.hd rev) in
+      is_perm_ok [fs] path && not (mem fs path dir_name) && b
     | Mkdir (_path, _dir_name, _perm), Res ((Result (Unit,Exn),_), _r) -> assert(false)
     | _,_ -> false
 end
