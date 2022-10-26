@@ -29,7 +29,7 @@ struct
     let  str_gen = Gen.(oneofl ["c"; "e"; "r"]) in
     let  name_gen = Gen.(oneofl ["aaa" ; "bbb" ; "ccc" ; "ddd" ; "eee"]) in
     (* let path_gen = Gen.(oneofl [["root"] ; ["root"; "c"] ; ["root" ; "c" ; "e"] ; ["root" ; "r" ; "r"]]) in *)
-    let path_gen = Gen.map (fun path -> "root" :: path) (Gen.list_size (Gen.int_bound 5) name_gen) in
+    let path_gen = Gen.map (fun path -> "sandbox_root" :: path) (Gen.list_size (Gen.int_bound 5) name_gen) in
     let perm_gen = Gen.(oneofl [0o777]) in
     (* let perm_gen = Gen.map3 (fun d1 d2 d3 -> d1*100 + d2*10 + d3*1) (Gen.int_bound 7) (Gen.int_bound 7) (Gen.int_bound 7) in *)
     QCheck.make ~print:show_cmd 
@@ -39,10 +39,10 @@ struct
                 map3 (fun path dir_name perm -> Mkdir (path, dir_name, perm)) path_gen str_gen perm_gen;
             ])
 
-  let static_path = Sys.getcwd ()
+  let static_path = Sys.getcwd () / "src/sys"
 
   let init_state  = 
-    Directory {perm = 0o777; dir_name = "root"; fs_list = []}
+    Directory {perm = 0o777; dir_name = "sandbox_root"; fs_list = []}
 
   let rec is_perm_ok (fsl: filesys list) path = 
     match fsl with
@@ -58,7 +58,7 @@ struct
     | File f :: tl -> (match path with
       | [] -> true
       | hd_path :: _tl_path -> if f.file_name = hd_path
-        then (assert (List.length path = 1); true)
+        then true
         else is_perm_ok tl path
       )
 
@@ -109,9 +109,9 @@ struct
 
   let init_sut () = 
     (* try Sys.mkdir static_path 0o777 with Sys_error _ -> (); *)
-    try Sys.mkdir (static_path / "root") 0o777 with Sys_error _ -> ()
+    try Sys.mkdir (static_path / "sandbox_root") 0o777 with Sys_error _ -> ()
 
-  let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "root")))
+  let cleanup _   = ignore (Sys.command ("rm -r -d -f " ^ (static_path / "sandbox_root")))
 
   let precond _c _s = true 
 
